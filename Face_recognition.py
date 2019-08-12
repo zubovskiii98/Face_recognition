@@ -39,8 +39,8 @@ out_encoder.fit(trainy)
 trainy = out_encoder.transform(trainy)
 testy = out_encoder.transform(testy)
 
-model_final = SVC(kernel='linear')
-model_final.fit(trainX, trainy)
+# model_final = SVC(kernel='linear', probability = True)
+# model_final.fit(trainX, trainy)
 
 from keras.models import load_model
 # load the facenet model
@@ -68,23 +68,36 @@ def get_embedding(model, face_pixels):
 	yhat = model.predict(samples)
 	return yhat[0]
 
+def findCosineSimilarity(source_representation, test_representation):
+	a = np.matmul(np.transpose(source_representation), test_representation)
+	b = np.sum(np.multiply(source_representation, source_representation))
+	c = np.sum(np.multiply(test_representation, test_representation))
+	return 1 - (a / (np.sqrt(b) * np.sqrt(c)))
+
 def find_closest(emb):
 		ind = 0
 		max_dif = sys.float_info.max
 		for i in range(trainX.shape[0]):
-			dif = trainX[i] - emb
-			dif = np.power(dif, 2)
-			dif = np.sum(dif)
-			dif = np.sqrt(dif)
+			dif = findCosineSimilarity(trainX[i], emb)
+			# dif = np.linalg.norm(dif)
+			# dif = np.power(dif, 2)
+			# dif = np.sum(dif)
+			# dif = np.sqrt(dif)
 			if dif < max_dif:
 				ind = i
 				max_dif = dif
-		print(max_dif)
-		label = out_encoder.inverse_transform([trainy[ind]])
-		return label
+				
+		if max_dif > 0.5:
+			label = ['Unknown']
+		else:
+			label = out_encoder.inverse_transform([trainy[ind]])
+		return label, max_dif
 
-    	
+ord = 0
 while 1:
+    ord = ord + 1
+    if ord % 30 != 0:
+        continue
     ret, img = cap.read()
     img_pil = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
     result = detector.detect_faces(img_pil)
@@ -95,15 +108,26 @@ while 1:
         keypoints = result[i]['keypoints']
         
         frame = img_pil[bounding_box[1]-50:bounding_box[1]+bounding_box[3] + 51,bounding_box[0] - 50:bounding_box[0]+bounding_box[2] + 51]
+        if frame.shape[0] == 0 or frame.shape[1] == 0:
+            continue
         
         # plt.imshow(frame)
         # plt.show()
         imgs = asarray(extract_img(frame))
         emb = get_embedding(model, imgs)
         # emb = asarray([emb])
-		# lab = model_final.predict(emb)
-        lab = find_closest(emb)
-        cv2.putText(img, str(lab[0]),(bounding_box[0], bounding_box[1]),cv2.FONT_HERSHEY_DUPLEX, 2, (255, 255, 0), 2)
+        # lab = model_final.predict_proba(emb)
+        # lab = lab[0]
+        # if lab[0] > 0.95 or lab[1] > 0.95:
+        #     if lab[0] > lab[1]:
+        #         lab = 'Ibah'
+        #     else:
+        #         lab = 'Nick'
+        # else:
+        #     lab = 'Unkown'
+        lab, prob = find_closest(emb)
+        print(prob)
+        cv2.putText(img, str(lab) + ' ' + str(prob),(bounding_box[0], bounding_box[1]),cv2.FONT_HERSHEY_DUPLEX, 2, (255, 255, 0), 2)
         cv2.rectangle(img,
                         (bounding_box[0], bounding_box[1]),
                         (bounding_box[0]+bounding_box[2], bounding_box[1] + bounding_box[3]),
