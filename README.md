@@ -1,2 +1,2 @@
-# Face_recognition
+# Face Recognition
 Enterprise solution for face recognition
