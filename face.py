@@ -15,35 +15,33 @@ detector = MTCNN()
 
 while 1:
     ret, img = cap.read()
-    result = detector.detect_faces(img)
+    img_pil = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
+    result = detector.detect_faces(img_pil)
 
     for i in range(len(result)):
         # Result is an array with all the bounding boxes detected. We know that for 'ivan.jpg' there is only one.
         bounding_box = result[i]['box']
         keypoints = result[i]['keypoints']
+        
+        frame = img_pil[bounding_box[0]-50:bounding_box[0]+bounding_box[2] + 51,bounding_box[1] - 50:bounding_box[1]+bounding_box[3] + 51]
+        
 
+        imgs = asarray(extract_img(frame))
+        emb = get_embedding(model, imgs)
+        emb = asarray([emb])
+        lab = model_final.predict(emb)
+        cv2.putText(img, out_encoder.inverse_transform(lab)[0],(bounding_box[0], bounding_box[1]),4,(255,255,255),2,cv2.LINE_AA)
         cv2.rectangle(img,
                         (bounding_box[0], bounding_box[1]),
                         (bounding_box[0]+bounding_box[2], bounding_box[1] + bounding_box[3]),
                         (0,155,255),
                         2)
 
-        cv2.circle(img,(keypoints['left_eye']), 2, (0,155,255), 2)
-        cv2.circle(img,(keypoints['right_eye']), 2, (0,155,255), 2)
-        cv2.circle(img,(keypoints['nose']), 2, (0,155,255), 2)
-        cv2.circle(img,(keypoints['mouth_left']), 2, (0,155,255), 2)
-        cv2.circle(img,(keypoints['mouth_right']), 2, (0,155,255), 2)
-#     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-#     faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-
-#     for (x,y,w,h) in faces:
-#         cv2.rectangle(img,(x,y),(x+w,y+h),(255,0,0),2)
-#         roi_gray = gray[y:y+h, x:x+w]
-#         roi_color = img[y:y+h, x:x+w]
-        
-#         eyes = eye_cascade.detectMultiScale(roi_gray)
-#         for (ex,ey,ew,eh) in eyes:
-#             cv2.rectangle(roi_color,(ex,ey),(ex+ew,ey+eh),(0,255,0),2)
+#         cv2.circle(img,(keypoints['left_eye']), 2, (0,155,255), 2)
+#         cv2.circle(img,(keypoints['right_eye']), 2, (0,155,255), 2)
+#         cv2.circle(img,(keypoints['nose']), 2, (0,155,255), 2)
+#         cv2.circle(img,(keypoints['mouth_left']), 2, (0,155,255), 2)
+#         cv2.circle(img,(keypoints['mouth_right']), 2, (0,155,255), 2)
 
     cv2.imshow('img',img)
     k = cv2.waitKey(30) & 0xff
