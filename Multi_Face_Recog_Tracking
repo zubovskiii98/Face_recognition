@@ -1,0 +1,233 @@
+import numpy as np
+import cv2
+import os
+from mtcnn.mtcnn import MTCNN
+from PIL import Image, ImageDraw, ImageFont
+
+# ------------------------- Functions ----------------------------
+def statusDisplay(string):
+    os.system('cls')
+
+    print('\n' + ' # ------------------------------------------------- # ')
+    print('\t' + string)
+    print(' # ------------------------------------------------- # ')
+
+def saveToLog(log, string, counter):
+    log [counter] = string
+    counter = counter + 1
+
+cap = cv2.VideoCapture(0)
+detector = MTCNN()
+# ----------------------------------------------------------------
+
+
+# ------------------Switch to detect/track------------------------
+faceFound = False
+# ----------------------------------------------------------------
+
+
+# -------- Open player and take 50 frames to start-up ------------
+i = 0
+while i < 50:
+    ret, img = cap.read()
+    i = i + 1
+# ----------------------------------------------------------------
+
+
+# -----------------Tracker init------------------------------------
+(major_ver, minor_ver, subminor_ver) = (cv2.__version__).split('.')
+
+tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 
+                    'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
+tracker_type = tracker_types[2]
+
+
+if tracker_type == 'BOOSTING':
+    tracker = cv2.TrackerBoosting_create()
+elif tracker_type == 'MIL':
+    tracker = cv2.TrackerMIL_create()
+elif tracker_type == 'KCF':
+    tracker = cv2.TrackerKCF_create()
+elif tracker_type == 'TLD':
+    tracker = cv2.TrackerTLD_create()
+elif tracker_type == 'MEDIANFLOW':
+    tracker = cv2.TrackerMedianFlow_create()
+elif tracker_type == 'GOTURN':
+    tracker = cv2.TrackerGOTURN_create()
+elif tracker_type == 'MOSSE':
+    tracker = cv2.TrackerMOSSE_create()
+elif tracker_type == "CSRT":
+    tracker = cv2.TrackerCSRT_create()
+else:
+    print ('Tracker type not chosen successfully') 
+    
+#tracker = cv2.MultiTracker_create()
+# ----------------------------------------------------------------
+
+# -------------------------- Variables ---------------------------
+bbox = [[0 for col in range(4)] for row in range(2)]
+trackers = []
+ok = []
+waitlist = []
+frameCount = 100
+fps = 30
+
+while 1:
+    
+    # Read a frame
+    ret, img = cap.read()
+    frameCount = frameCount + 1
+    
+    # Start timer
+    timer = cv2.getTickCount()
+    
+    # -------------------------------------------------
+    # If no faces detected - use detector
+    # -------------------------------------------------
+    
+    if frameCount > 50:
+    
+        # Delete previous trackers and buffers
+        ok      [:] = []
+        bbox    [:] = []
+        trackers[:] = []
+        
+        
+        frameCount = 0
+        statusDisplay('Detection mode')
+        
+        print('Looking for a face')
+        # Detect faces in a frame
+        result = detector.detect_faces(img)
+        
+        # Save original Image
+        orImg = img
+        
+        print('Entering drawing loop (face_detection)')
+        
+        # Display found points and bbox
+        for i in range(len(result)):
+            # Result is an array with all the bounding boxes detected. We know that for 'ivan.jpg' there is only one.
+            bounding_box = result[i]['box']
+            keypoints = result[i]['keypoints']
+            
+            bounding_boxRect = (bounding_box[0], bounding_box[1],
+                       bounding_box[2], bounding_box[3])
+            
+            cv2.rectangle(img, bounding_boxRect, (0,155,255) ,2)
+
+            cv2.circle(img,(keypoints['left_eye']), 2, (0,155,255), 2)
+            cv2.circle(img,(keypoints['right_eye']), 2, (0,155,255), 2)
+            cv2.circle(img,(keypoints['nose']), 2, (0,155,255), 2)
+            cv2.circle(img,(keypoints['mouth_left']), 2, (0,155,255), 2)
+            cv2.circle(img,(keypoints['mouth_right']), 2, (0,155,255), 2)
+            
+
+            
+        # ---------------------- Harris points --------------------- #   
+
+
+        # ---------------------------------------------------------- #
+    
+            print('Initialize tracker')
+            # Initialize tracker with first frame and bounding box
+            
+            bbox    .append(bounding_box)
+
+            tracker = cv2.TrackerKCF_create()          
+            status  = tracker.init(img, tuple(bbox[i]))
+            
+            #print (ok)
+            #print (bbox)
+            #print (trackers)
+            
+            trackers.insert(i, tracker)
+            ok      .insert(i, status)
+
+            
+                        
+        if any(ok):
+            # print (result)
+            # print (tuple(bounding_box))
+            print('Tracker not initialized, /continue/')
+            continue
+        else:
+            # print (result)
+            # print (tuple(bounding_box))
+            print('Tracker initialized successfully')
+            
+            
+    # --------------------------------------------------------------
+    # If face detected start tracking mode
+    # --------------------------------------------------------------
+    
+    else:
+        
+        statusDisplay('Tracking mode')
+        print(bbox)
+        print(trackers)
+        print(result)
+        
+        print('Get timer value and calculate FPS')
+        
+        for i in range(len(ok)):
+        
+        
+            # Update tracker per each instance
+            ok[i], bbox[i] = trackers[i].update(img)
+
+            print('Success')
+            
+            print('Draw tracking bounding_box')
+            # Draw bounding box
+            if int(ok[i]):
+                # Tracking success
+                p1 = (int(bbox[i][0]), int(bbox[i][1]))
+                p2 = (int(bbox[i][0] + bbox[i][2]), int(bbox[i][1] + bbox[i][3]))
+                cv2.rectangle(img, p1, p2, (255,0,0), 2, 1)
+            else:
+                print('Failure')
+                
+                # Tracking failure
+                cv2.putText(img, "Tracking failure detected", (100,80), cv2.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,255),2)
+                
+                waitlist.append(i)
+            
+            
+        # Remove elements queied in the waitlist    
+        for i in range(len(waitlist)):
+            
+            ok      .pop(i)
+            bbox    .pop(i)
+            del trackers[i]
+            
+        waitlist [:] = []        
+        
+        
+        print('Display tracker info')
+        # Display tracker type on frame
+        cv2.putText(img, tracker_type + " Tracker", (100,20), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50,170,50),2);
+     
+        # Display FPS on frame
+        cv2.putText(img, "FPS : " + str(int(fps)), (100,50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50,170,50), 2);
+        
+
+    
+    cv2.imshow('img',img)
+    
+    # Calculate Frames per second (FPS)
+    fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer);
+    
+    k = cv2.waitKey(30) & 0xff
+    if k == 27:
+        break
+
+
+cap.release()
+cv2.destroyAllWindows()
+
+
+
+
+
+
